@@ -13,10 +13,16 @@ declare -i APComm_seq=0  # 0:register / 1:update
 declare -i APComm_timer=0
 APComm_jsonRegister=""
 APComm_jsonUpdate=""
+APComm_last_error=""
+declare -r APComm_curl_meta_sep="__APCOMM_CURL_META__"
 
 #-------------------------------
 # AutoPause Community API
 #-------------------------------
+
+APComm_formatLogMessage() {
+    printf '%s' "${1}" | tr '\r\n' ' ' | sed 's/[[:space:]]\+/ /g' | cut -c1-200
+}
 
 # api.palworldgame.com/server Call
 APComm_API() {
@@ -25,9 +31,37 @@ APComm_API() {
     local url="${APComm_API_URL}${api}"
     local accept="Accept: application/json"
     local agent="X-UnrealEngine-Agent"
+    local raw response meta exit_code http_code error_message
 
-    # Use -sS for silent but show errors, --fail to fail on HTTP errors, --max-time for timeout
-    curl -sS --fail --max-time 10 --retry 2 --retry-delay 1 -L -X POST "${url}" -H "${accept}" -A "${agent}" --json "${data}" 2>&1
+    raw=$(curl -s --fail --max-time 10 --retry 2 --retry-delay 3 -L -X POST "${url}" -H "${accept}" -A "${agent}" --json "${data}" --write-out "\n${APComm_curl_meta_sep}\n%{exitcode}\n%{response_code}\n%{errormsg}")
+    meta="${raw##*$'\n'"${APComm_curl_meta_sep}"$'\n'}"
+    response="${raw%$'\n'"${APComm_curl_meta_sep}"$'\n'*}"
+
+    if [ "${meta}" = "${raw}" ]; then
+        APComm_last_error="curl metadata missing"
+        return 1
+    fi
+
+    exit_code="${meta%%$'\n'*}"
+    meta="${meta#*$'\n'}"
+    http_code="${meta%%$'\n'*}"
+    error_message="${meta#*$'\n'}"
+
+    if [ "${exit_code}" = "0" ]; then
+        APComm_last_error=""
+        printf '%s' "${response}"
+        return 0
+    fi
+
+    if [ -n "${error_message}" ]; then
+        APComm_last_error="$(APComm_formatLogMessage "${error_message}")"
+    elif [ -n "${http_code}" ] && [ "${http_code}" != "000" ]; then
+        APComm_last_error="HTTP ${http_code}"
+    else
+        APComm_last_error="curl exited with code ${exit_code}"
+    fi
+
+    return 1
 }
 
 APComm_loadJSON() {
@@ -62,12 +96,12 @@ APComm_register() {
     fi
 
     if ! response=$(APComm_API "server/register" "${data}"); then
-        APLog_error "server/register API call failed: $(printf '%.200s' "${response}")"
+        APLog_error "server/register API call failed: ${APComm_last_error}"
         return 1
     fi
 
     if ! echo "${response}" | jq -n 'input | empty' > /dev/null 2>&1; then
-        APLog_error "server/register API returned invalid JSON response: $(printf '%.200s' "${response}")"
+        APLog_error "server/register API returned invalid JSON response: $(APComm_formatLogMessage "${response}")"
         return 1
     fi
 
@@ -82,7 +116,7 @@ APComm_register() {
     fi
 
     # Mask sensitive data in log if possible, or just truncate
-    APLog_error "Registration failed (missing id or key): $(printf '%.200s' "${response}")"
+    APLog_error "Registration failed (missing id or key): $(APComm_formatLogMessage "${response}")"
     return 1
 }
 
@@ -90,12 +124,12 @@ APComm_update() {
     local response message status
 
     if ! response=$(APComm_API "server/update" "${APComm_jsonUpdate}"); then
-        APLog_error "server/update API call failed: $(printf '%.200s' "${response}")"
+        APLog_error "server/update API call failed: ${APComm_last_error}"
         return 1
     fi
 
     if ! echo "${response}" | jq -n 'input | empty' > /dev/null 2>&1; then
-        APLog_error "server/update API returned invalid JSON response: $(printf '%.200s' "${response}")"
+        APLog_error "server/update API returned invalid JSON response: $(APComm_formatLogMessage "${response}")"
         return 1
     fi
 
@@ -109,7 +143,7 @@ APComm_update() {
         return 1
     fi
 
-    APLog_error "Update failed: $(printf '%.200s' "${response}")"
+    APLog_error "Update failed: $(APComm_formatLogMessage "${response}")"
     return 1
 }
 
