@@ -27,9 +27,12 @@ This feature requires `ENABLE_PLAYER_LOGGING=true` and `REST_API_ENABLED=true` t
 | AUTO_PAUSE_LOG         | Enable auto-pause logging                                                                                                                | true           | true/false     |
 | AUTO_PAUSE_DEBUG       | Enable auto-pause debug logging                                                                                                          | false          | true/false     |
 
-If you want timestamps in the container logs for auto-pause events, either run `docker logs -t palworld-server` or set `LOG_FORMAT_TYPE=plain` or `LOG_FORMAT_TYPE=colored`.
+If you want timestamps in the container logs for auto-pause events,
+either run `docker logs -t palworld-server` or set
+`LOG_FORMAT_TYPE=plain` or `LOG_FORMAT_TYPE=colored`.
 
-`AUTO_PAUSE_LOG` messages go through the shared container logger, so `LOG_FILTER_ENABLED` and `LOG_FORMAT_TYPE` apply to them too.
+`AUTO_PAUSE_LOG` messages go through the shared container logger,
+so `LOG_FILTER_ENABLED` and `LOG_FORMAT_TYPE` apply to them too.
 
 :::note
 When using **Podman**, you must add the `--cap-add=NET_RAW` option to the `run` or `create` command.
