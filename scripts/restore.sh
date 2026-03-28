@@ -25,7 +25,7 @@ restore_error_handler() {
         if [[ ${RUN_ANSWER,,} == "y" ]]; then
             rm -rf "$RESTORE_PATH/Saved"
             mv "$TMP_SAVE_PATH/Saved" "$RESTORE_PATH"
-            PrintSuccess "Recovery Complete"
+            LogSuccess "Recovery Complete"
         fi
     fi
 
