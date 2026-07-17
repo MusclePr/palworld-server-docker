@@ -22,6 +22,9 @@ cd /palworld || exit
 
 # Get the architecture using dpkg
 architecture=$(dpkg --print-architecture)
+platform=$(ServerPlatform)
+settings_file=$(PalworldSettingsFilePath)
+settings_dir=$(dirname "${settings_file}")
 
 IsInstalled
 ServerInstalled=$?
@@ -37,16 +40,53 @@ if [ "$ServerInstalled" == 0 ] && [ "${UPDATE_ON_BOOT,,}" == true ]; then
     InstallServer
 fi
 
-STARTCOMMAND=("./PalServer.sh")
+STARTCOMMAND=()
+STARTCOMMAND_NOARGS=()
+
+if [ "${platform}" = "windows" ]; then
+    server_binary="$(PalworldServerBinaryPath)"
+    runtime="$(ServerRuntime)"
+
+    if ! fileExists "${server_binary}"; then
+        LogError "Server Not Installed Properly"
+        exit 1
+    fi
+
+    case "${runtime}" in
+        proton)
+            if ! command -v proton > /dev/null 2>&1; then
+                LogError "SERVER_RUNTIME=proton is selected but proton binary is not installed in this image."
+                exit 1
+            fi
+            STARTCOMMAND=("proton" "run" "${server_binary}")
+            ;;
+        wine)
+            if ! command -v wine > /dev/null 2>&1; then
+                LogError "SERVER_RUNTIME=wine is selected but wine binary is not installed in this image."
+                exit 1
+            fi
+            STARTCOMMAND=("wine" "${server_binary}")
+            ;;
+        *)
+            LogError "Invalid SERVER_RUNTIME=${runtime}. Allowed values for Windows are proton|wine."
+            exit 1
+            ;;
+    esac
+
+    STARTCOMMAND_NOARGS=("${STARTCOMMAND[@]}")
+else
+    STARTCOMMAND=("./PalServer.sh")
+    STARTCOMMAND_NOARGS=("./PalServer.sh")
+fi
 
 #Validate Installation
-if ! fileExists "${STARTCOMMAND[0]}"; then
+if [ "${platform}" = "linux" ] && ! fileExists "${STARTCOMMAND[0]}"; then
     LogError "Server Not Installed Properly"
     exit 1
 fi
 
 # Check if the architecture is arm64
-if [ "$architecture" == "arm64" ]; then
+if [ "${platform}" = "linux" ] && [ "$architecture" == "arm64" ]; then
     # create an arm64 version of ./PalServer.sh
 
     cp ./PalServer.sh ./PalServer-arm64.sh
@@ -54,13 +94,16 @@ if [ "$architecture" == "arm64" ]; then
     sed -i "s|\(\"\$UE_PROJECT_ROOT\/Pal\/Binaries\/Linux\/PalServer-Linux-Shipping\" Pal \"\$@\"\)|LD_LIBRARY_PATH=/home/steam/steamcmd/linux64:\$LD_LIBRARY_PATH /usr/local/bin/box64 \1|" ./PalServer-arm64.sh
     chmod +x ./PalServer-arm64.sh
     STARTCOMMAND=("./PalServer-arm64.sh")
+    STARTCOMMAND_NOARGS=("./PalServer-arm64.sh")
 fi
 
-isReadable "${STARTCOMMAND[0]}" || exit
-if ! isExecutable "${STARTCOMMAND[0]}"; then
-    LogWarn "Attempt to make \"${STARTCOMMAND[0]}\" executable"
-    chmod +x "${STARTCOMMAND[0]}" || exit
-    isExecutable "${STARTCOMMAND[0]}" || exit
+if [ "${platform}" = "linux" ]; then
+    isReadable "${STARTCOMMAND[0]}" || exit
+    if ! isExecutable "${STARTCOMMAND[0]}"; then
+        LogWarn "Attempt to make \"${STARTCOMMAND[0]}\" executable"
+        chmod +x "${STARTCOMMAND[0]}" || exit
+        isExecutable "${STARTCOMMAND[0]}" || exit
+    fi
 fi
 
 # Prepare Arguments
@@ -110,20 +153,17 @@ container_version_check
 if [ "${DISABLE_GENERATE_SETTINGS,,}" = true ]; then
   LogAction "GENERATING CONFIG"
   LogWarn "Env vars will not be applied due to DISABLE_GENERATE_SETTINGS being set to TRUE!"
+  mkdir -p "${settings_dir}" || exit
 
   # shellcheck disable=SC2143
-  if [ ! "$(grep -s '[^[:space:]]' /palworld/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini)" ]; then
+  if [ ! "$(grep -s '[^[:space:]]' "${settings_file}")" ]; then
       LogAction "GENERATING CONFIG"
       # Server will generate all ini files after first run.
-      if [ "$architecture" == "arm64" ]; then
-          timeout --preserve-status 15s ./PalServer-arm64.sh 1> /dev/null
-      else
-          timeout --preserve-status 15s ./PalServer.sh 1> /dev/null
-      fi
+      timeout --preserve-status 15s "${STARTCOMMAND_NOARGS[@]}" 1> /dev/null
 
       # Wait for shutdown
       sleep 5
-      cp /palworld/DefaultPalWorldSettings.ini /palworld/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+      cp /palworld/DefaultPalWorldSettings.ini "${settings_file}"
   fi
 else
   LogAction "GENERATING CONFIG"

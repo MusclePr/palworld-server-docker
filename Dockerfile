@@ -104,6 +104,8 @@ RUN wget --progress=dot:giga https://github.com/Metalcape/knock/releases/downloa
 
 # hadolint ignore=DL3044
 ENV HOME=/home/steam \
+    SERVER_PLATFORM=Linux \
+    SERVER_RUNTIME= \
     PORT= \
     PUID=1000 \
     PGID=1000 \
@@ -237,7 +239,7 @@ RUN touch rcon.yaml crontab && \
     chown steam:steam -R /home/steam/server
 
 HEALTHCHECK --start-period=5m \
-    CMD pgrep "PalServer-Linux" > /dev/null || exit 1
+    CMD pgrep -f "PalServer-Linux|PalServer-Win64-Shipping" > /dev/null || exit 1
 
 EXPOSE ${PORT} ${RCON_PORT}
 ENTRYPOINT ["/home/steam/server/init.sh"]

@@ -95,6 +95,131 @@ isTrue() {
     return 1
 }
 
+ServerPlatform() {
+    local platform="${SERVER_PLATFORM:-Linux}"
+    platform="${platform,,}"
+
+    case "${platform}" in
+        linux)
+            echo "linux"
+            ;;
+        windows)
+            echo "windows"
+            ;;
+        *)
+            echo "linux"
+            ;;
+    esac
+}
+
+ServerRuntime() {
+    local runtime="${SERVER_RUNTIME:-}"
+    local platform
+    platform="$(ServerPlatform)"
+
+    if [ -z "${runtime}" ]; then
+        if [ "${platform}" = "windows" ]; then
+            echo "proton"
+            return 0
+        fi
+
+        echo "native"
+        return 0
+    fi
+
+    echo "${runtime,,}"
+}
+
+PalworldConfigSubdir() {
+    local platform
+    platform="$(ServerPlatform)"
+
+    if [ "${platform}" = "windows" ]; then
+        echo "WindowsServer"
+        return 0
+    fi
+
+    echo "LinuxServer"
+}
+
+PalworldSettingsFilePath() {
+    echo "/palworld/Pal/Saved/Config/$(PalworldConfigSubdir)/PalWorldSettings.ini"
+}
+
+PalworldEngineFilePath() {
+    echo "/palworld/Pal/Saved/Config/$(PalworldConfigSubdir)/Engine.ini"
+}
+
+PalworldInstallMarkerPath() {
+    local platform
+    platform="$(ServerPlatform)"
+
+    if [ "${platform}" = "windows" ]; then
+        echo "/palworld/Pal/Binaries/Win64/PalServer-Win64-Shipping-Cmd.exe"
+        return 0
+    fi
+
+    echo "/palworld/PalServer.sh"
+}
+
+PalworldServerBinaryPath() {
+    local platform
+    platform="$(ServerPlatform)"
+
+    if [ "${platform}" = "windows" ]; then
+        echo "/palworld/Pal/Binaries/Win64/PalServer-Win64-Shipping-Cmd.exe"
+        return 0
+    fi
+
+    echo "/palworld/PalServer.sh"
+}
+
+PalworldServerProcessMatch() {
+    local platform
+    platform="$(ServerPlatform)"
+
+    if [ "${platform}" = "windows" ]; then
+        echo "PalServer-Win64-Shipping-Cmd.exe|PalServer-Win64-Shipping"
+        return 0
+    fi
+
+    echo "PalServer-Linux-Shipping"
+}
+
+PalworldServerPid() {
+    local platform
+    local process_match
+    platform="$(ServerPlatform)"
+    process_match="$(PalworldServerProcessMatch)"
+
+    if [ "${platform}" = "windows" ]; then
+        pgrep -f -o "${process_match}"
+        return $?
+    fi
+
+    pidof "${process_match}"
+}
+
+PalworldSteamPlatformType() {
+    local platform
+    platform="$(ServerPlatform)"
+
+    if [ "${platform}" = "windows" ]; then
+        echo "windows"
+        return 0
+    fi
+
+    echo "linux"
+}
+
+PalworldDepotDownloaderOS() {
+    PalworldSteamPlatformType
+}
+
+PalworldDepotId() {
+    echo "${PALWORLD_DEPOT_ID:-2394012}"
+}
+
 PlayerLogging_isEnabled() {
     isTrue "${ENABLE_PLAYER_LOGGING}" && [[ "${PLAYER_LOGGING_POLL_PERIOD}" =~ ^[0-9]+$ ]] && { isTrue "${REST_API_ENABLED}" || isTrue "${RCON_ENABLED}"; }
 }

@@ -65,7 +65,9 @@ term_handler() {
 
     if ! shutdown_server; then
         # Does not save
-        kill -SIGTERM "$(pidof PalServer-Linux-Shipping)"
+        if server_pid="$(PalworldServerPid)"; then
+            kill -SIGTERM "${server_pid}"
+        fi
     fi
 
     tail --pid="$killpid" -f 2>/dev/null

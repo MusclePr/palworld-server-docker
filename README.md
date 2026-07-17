@@ -204,6 +204,7 @@ The official helm chart can be found in a seperate repository, [palworld-server-
 You can use the following values to change the settings of the server on boot.
 It is highly recommended you set the following environment values before starting the server:
 
+* SERVER_PLATFORM (`Linux` default, `Windows` experimental)
 * PLAYERS
 * PORT
 * PUID

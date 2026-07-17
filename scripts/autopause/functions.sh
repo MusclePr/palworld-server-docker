@@ -42,7 +42,7 @@ AP_clean() {
 }
 
 AP_isEnabled() {
-    isTrue "${AUTO_PAUSE_ENABLED}" && PlayerLogging_isEnabled
+    isTrue "${AUTO_PAUSE_ENABLED}" && PlayerLogging_isEnabled && [ "$(ServerPlatform)" = "linux" ]
 }
 
 AP_isPaused() {
@@ -80,7 +80,7 @@ AP_disable() {
 
 AP_pause() {
     local -r on="${1:-on}"
-    local -r pid=$(pidof PalServer-Linux-Shipping)
+    local -r pid=$(PalworldServerPid)
     if isTrue "${on}"; then
         if AP_isSleep; then
             APLog_warn "Already sleeped..."
