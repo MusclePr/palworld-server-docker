@@ -26,6 +26,87 @@ platform=$(ServerPlatform)
 settings_file=$(PalworldSettingsFilePath)
 settings_dir=$(dirname "${settings_file}")
 
+clean_platform() {
+    LogInfo "Cleaning up other platform files"
+    (
+        cd /palworld;
+        ls -1A | sed -e '/^Pal$/d' | tr '\n' ' ' | xargs rm -rf;
+        cd Pal;
+        ls -1A | sed -e '/^Saved$/d' | tr '\n' ' ' | xargs rm -rf;
+    )
+}
+
+if [ "${platform}" = "windows" ] && ( [ -f /palworld/PalServer.sh ] || [ ! -f /palworld/PalServer.exe ] ); then
+    clean_platform
+elif [ "${platform}" = "linux" ] && ( [ -f /palworld/PalServer.exe ] || [ ! -f /palworld/PalServer.sh ] ); then
+    clean_platform
+fi
+
+
+ensure_windows_runtime() {
+    if [ "${architecture}" != "amd64" ]; then
+        LogError "SERVER_PLATFORM=Windows is supported only on amd64 hosts. Current architecture: ${architecture}."
+        exit 1
+    fi
+
+    export WINEPREFIX="${WINEPREFIX:-/palworld/.wine}"
+    export WINEARCH="${WINEARCH:-win64}"
+    export WINEDEBUG="${WINEDEBUG:--all}"
+    export WINEDLLOVERRIDES="${WINEDLLOVERRIDES:-mscoree,mshtml=;dwmapi=n,b}"
+    export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/home/steam/.xdg-runtime}"
+
+    # Ensure XDG_RUNTIME_DIR exists with proper permissions
+    if [ ! -d "${XDG_RUNTIME_DIR}" ]; then
+        mkdir -p "${XDG_RUNTIME_DIR}"
+        chmod 700 "${XDG_RUNTIME_DIR}"
+    fi
+
+    if ! command -v wine > /dev/null 2>&1; then
+        LogError "wine binary is not installed in this image. Rebuild image with Wine dependencies."
+        exit 1
+    fi
+
+    if [ ! -d "${WINEPREFIX}" ] || [ ! -f "${WINEPREFIX}/.wine-initialized" ]; then
+        LogAction "Initializing Wine"
+        mkdir -p "${WINEPREFIX}"
+        WINEDLLOVERRIDES="${WINEDLLOVERRIDES}" wineboot --init || {
+            LogError "Failed to initialize Wine prefix."
+            exit 1
+        }
+        wineserver -w || true
+        touch "${WINEPREFIX}/.wine-initialized"
+    fi
+
+    local marker_file="${WINEPREFIX}/.vcrun2022-installed"
+    local winetricks_runner=()
+
+    if [ ! -f "${marker_file}" ]; then
+        if command -v winetricks > /dev/null 2>&1; then
+            LogAction "Installing Visual C++ runtime via winetricks"
+
+            if command -v xvfb-run > /dev/null 2>&1; then
+                LogInfo "Using xvfb-run for headless winetricks execution"
+                winetricks_runner=(xvfb-run -a --server-args="${WINETRICKS_XVFB_SERVER_ARGS:--screen 0 1024x768x24}")
+            else
+                winetricks_runner=()
+            fi
+
+            if "${winetricks_runner[@]}" winetricks -q vcrun2022; then
+                touch "${marker_file}"
+            else
+                LogWarn "winetricks vcrun2022 installation failed. Continuing startup."
+            fi
+        else
+            LogWarn "winetricks binary not found. Skipping setup."
+        fi
+    fi
+}
+
+if [ "${platform}" = "windows" ] && [ "${architecture}" = "arm64" ]; then
+    LogError "SERVER_PLATFORM=Windows is not supported on arm64. Use SERVER_PLATFORM=Linux on arm64 hosts."
+    exit 1
+fi
+
 IsInstalled
 ServerInstalled=$?
 if [ "$ServerInstalled" == 1 ]; then
@@ -36,7 +117,7 @@ fi
 
 # Always update on boot even if the server is installed, to prevent appmanifest issues
 if [ "$ServerInstalled" == 0 ] && [ "${UPDATE_ON_BOOT,,}" == true ]; then
-    rm /palworld/steamapps/appmanifest_2394010.acf
+    rm -f /palworld/steamapps/appmanifest_2394010.acf
     InstallServer
 fi
 
@@ -44,34 +125,15 @@ STARTCOMMAND=()
 STARTCOMMAND_NOARGS=()
 
 if [ "${platform}" = "windows" ]; then
+    ensure_windows_runtime
     server_binary="$(PalworldServerBinaryPath)"
-    runtime="$(ServerRuntime)"
 
     if ! fileExists "${server_binary}"; then
         LogError "Server Not Installed Properly"
         exit 1
     fi
 
-    case "${runtime}" in
-        proton)
-            if ! command -v proton > /dev/null 2>&1; then
-                LogError "SERVER_RUNTIME=proton is selected but proton binary is not installed in this image."
-                exit 1
-            fi
-            STARTCOMMAND=("proton" "run" "${server_binary}")
-            ;;
-        wine)
-            if ! command -v wine > /dev/null 2>&1; then
-                LogError "SERVER_RUNTIME=wine is selected but wine binary is not installed in this image."
-                exit 1
-            fi
-            STARTCOMMAND=("wine" "${server_binary}")
-            ;;
-        *)
-            LogError "Invalid SERVER_RUNTIME=${runtime}. Allowed values for Windows are proton|wine."
-            exit 1
-            ;;
-    esac
+    STARTCOMMAND=("wine" "${server_binary}")
 
     STARTCOMMAND_NOARGS=("${STARTCOMMAND[@]}")
 else
@@ -147,6 +209,10 @@ if [ "${ENABLE_GAMEDATA_API,,}" = true ]; then
     STARTCOMMAND+=("-enable-gamedata-api")
 fi
 
+if [ "${NOSTEAM,,}" = true ]; then
+    STARTCOMMAND+=("-nosteam")
+fi
+
 LogAction "Checking for available container updates"
 container_version_check
 
@@ -175,6 +241,11 @@ if [ "${DISABLE_GENERATE_ENGINE,,}" = false ]; then
     /home/steam/server/compile-engine.sh || exit
 fi
 
+if [ "${platform}" = "windows" ]; then
+    LogAction "Syncing workshop mods"
+    mods-update || exit
+fi
+
 LogAction "GENERATING CRONTAB"
 truncate -s 0  "/home/steam/server/crontab"
 
@@ -196,6 +267,13 @@ if [ "${AUTO_REBOOT_ENABLED,,}" = true ] && [ "${REST_API_ENABLED,,}" = true ]; 
     LogInfo "AUTO_REBOOT_ENABLED=${AUTO_REBOOT_ENABLED,,}"
     LogInfo "Adding cronjob for auto rebooting via REST API"
     echo "$AUTO_REBOOT_CRON_EXPRESSION bash /home/steam/server/auto_reboot.sh" >> "/home/steam/server/crontab"
+    supercronic -quiet -test -no-reap "/home/steam/server/crontab" || exit
+fi
+
+if [ "${platform}" = "windows" ] && [ -n "${WORKSHOP_MOD_UPDATE_CRON:-}" ]; then
+    LogInfo "WORKSHOP_MOD_UPDATE_CRON=${WORKSHOP_MOD_UPDATE_CRON}"
+    LogInfo "Adding cronjob for workshop mod updates"
+    echo "$WORKSHOP_MOD_UPDATE_CRON bash /home/steam/server/mods/update.sh" >> "/home/steam/server/crontab"
     supercronic -quiet -test -no-reap "/home/steam/server/crontab" || exit
 fi
 

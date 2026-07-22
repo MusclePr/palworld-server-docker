@@ -112,24 +112,6 @@ ServerPlatform() {
     esac
 }
 
-ServerRuntime() {
-    local runtime="${SERVER_RUNTIME:-}"
-    local platform
-    platform="$(ServerPlatform)"
-
-    if [ -z "${runtime}" ]; then
-        if [ "${platform}" = "windows" ]; then
-            echo "proton"
-            return 0
-        fi
-
-        echo "native"
-        return 0
-    fi
-
-    echo "${runtime,,}"
-}
-
 PalworldConfigSubdir() {
     local platform
     platform="$(ServerPlatform)"
@@ -155,7 +137,7 @@ PalworldInstallMarkerPath() {
     platform="$(ServerPlatform)"
 
     if [ "${platform}" = "windows" ]; then
-        echo "/palworld/Pal/Binaries/Win64/PalServer-Win64-Shipping-Cmd.exe"
+        echo "/palworld/PalServer.exe"
         return 0
     fi
 
@@ -167,7 +149,7 @@ PalworldServerBinaryPath() {
     platform="$(ServerPlatform)"
 
     if [ "${platform}" = "windows" ]; then
-        echo "/palworld/Pal/Binaries/Win64/PalServer-Win64-Shipping-Cmd.exe"
+        echo "/palworld/PalServer.exe"
         return 0
     fi
 
@@ -179,7 +161,7 @@ PalworldServerProcessMatch() {
     platform="$(ServerPlatform)"
 
     if [ "${platform}" = "windows" ]; then
-        echo "PalServer-Win64-Shipping-Cmd.exe|PalServer-Win64-Shipping"
+        echo 'PalServer-Win64-Shipping-Cmd.exe'
         return 0
     fi
 
@@ -187,17 +169,7 @@ PalworldServerProcessMatch() {
 }
 
 PalworldServerPid() {
-    local platform
-    local process_match
-    platform="$(ServerPlatform)"
-    process_match="$(PalworldServerProcessMatch)"
-
-    if [ "${platform}" = "windows" ]; then
-        pgrep -f -o "${process_match}"
-        return $?
-    fi
-
-    pidof "${process_match}"
+    pgrep -f "$(PalworldServerProcessMatch)"
 }
 
 PalworldSteamPlatformType() {

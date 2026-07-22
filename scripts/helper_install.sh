@@ -150,6 +150,12 @@ UpdateRequired() {
 InstallServer() {
   # Get the architecture using dpkg
   architecture=$(dpkg --print-architecture)
+  platform=$(ServerPlatform)
+
+  if [ "${platform}" = "windows" ] && [ "${architecture}" = "arm64" ]; then
+    LogError "SERVER_PLATFORM=Windows is not supported on arm64."
+    return 2
+  fi
 
   # Get host kernel page size
   kernel_page_size=$(getconf PAGESIZE)

@@ -42,7 +42,7 @@ AP_clean() {
 }
 
 AP_isEnabled() {
-    isTrue "${AUTO_PAUSE_ENABLED}" && PlayerLogging_isEnabled && [ "$(ServerPlatform)" = "linux" ]
+    isTrue "${AUTO_PAUSE_ENABLED}" && PlayerLogging_isEnabled
 }
 
 AP_isPaused() {
@@ -55,7 +55,7 @@ AP_isForceDisabled() {
 
 # is realy paused
 AP_isSleep() {
-    test -n "$(pgrep -r T 'PalServer-Linux')"
+    test -n "$(pgrep -r T -f "$(PalworldServerProcessMatch)")"
 }
 
 AP_do() {
@@ -116,6 +116,7 @@ AP_pullRequest() {
 }
 
 AP_pushRequest() {
+    APLog_debug "AP_pushRequest: ${1}"
     AP_do "echo \"${1}\" > \"${AP_request_file}\""
 }
 
