@@ -61,7 +61,7 @@ AP_isSleep() {
 
 AP_do() {
     if [[ "$(id -u)" -eq 0 ]]; then
-        gosu steam bash -c "${1}"
+        setpriv --reuid=steam --regid=steam --init-groups bash -c "${1}"
     else
         eval "${1}"
     fi
