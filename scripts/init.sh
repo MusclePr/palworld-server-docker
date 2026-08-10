@@ -10,6 +10,9 @@ if ! ValidateNegativeDeltaRecoverySetting; then
     exit 1
 fi
 
+# Remove old FIFO
+rm -f "${PalServerLog_fifo}"
+
 mkdir -p /palworld/backups
 
 init_steam_home() {
@@ -76,8 +79,6 @@ fi
 
 if [ "${LOG_FILTER_ENABLED,,}" = true ]; then
     # Recreate FIFO at every boot to avoid stale descriptors and permission drift.
-    rm -f "${PalServerLog_fifo}"
-
     if ! mkfifo -m 600 "${PalServerLog_fifo}"; then
         echo "ERROR: Failed to create log FIFO: ${PalServerLog_fifo}" >&2
         exit 1
