@@ -55,6 +55,8 @@ if ! [ -w "/palworld" ]; then
     exit 1
 fi
 
+FORCE_CAPS=()
+
 # shellcheck source=scripts/autopause/init.sh
 source "/home/steam/server/autopause/init.sh"
 
@@ -74,7 +76,12 @@ term_handler() {
 
 trap 'term_handler' SIGTERM
 
-fork_as_user ./start.sh
+if [[ "$(id -u)" -eq 0 ]]; then
+    # Only if the capabilities set on the executable do not work, we reluctantly add NET_ADMIN and NET_RAW capabilities.
+    setpriv --reuid=steam --regid=steam --init-groups "${FORCE_CAPS[@]}" ./start.sh &
+else
+    ./start.sh &
+fi
 
 # Process ID of start.sh
 killpid="$!"
