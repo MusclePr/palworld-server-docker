@@ -8,7 +8,6 @@ declare -r DATA_DIR="${DATA_DIR:-/palworld}"
 declare -r AP_pause_file="${DATA_DIR}/.paused"
 declare -r AP_request_file="${DATA_DIR}/.autopause-request"
 declare -r AP_disable_file="${DATA_DIR}/.autopause-disabled" # for shutdown and reboot
-declare -r AP_monitor_backend_file="/home/steam/server/autopause/.monitor-backend"
 
 #-------------------------------
 # AutoPause Log

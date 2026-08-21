@@ -27,6 +27,7 @@ Knockd_interfaces="${AUTO_PAUSE_KNOCKD_IF:-auto}"
 Nflog_interfaces=(any)  # NFLOG backend always uses "any" to match all incoming packets via iptables rules.
 
 declare -a Knockd_resolvedInterfaces=()
+declare -r AP_monitor_backend_file="/home/steam/server/autopause/.monitor-backend"
 
 # Add an interface to the Knockd_resolvedInterfaces array if it exists and is not already present.
 # Validates interface exists via /sys/class/net and prevents duplicates.
