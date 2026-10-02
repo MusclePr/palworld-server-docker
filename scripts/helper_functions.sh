@@ -227,6 +227,10 @@ convert_JSON_to_CSV_players() {
 # Outputs nothing if REST API or RCON is not enabled and returns 1
 # Outputs player list if REST API or RCON is enabled and returns 0
 get_players_list() {
+    if autopause status '(paused|sleeping)' >/dev/null 2>&1; then
+        echo ""
+        return 0
+    fi
     # Prefer REST API
     if isTrue "${REST_API_ENABLED}"; then
         convert_JSON_to_CSV_players "$(REST_API players)"
@@ -379,13 +383,14 @@ REST_API() {
     local -r userpass="admin:${ADMIN_PASSWORD}"
     local -r post_api="save|stop"
     local -r down_api="shutdown|stop"
+    local -ar common_opts=("--connect-timeout" "10" "-m" "30" "-s" "-L")
     local -i result=0
     local output
     if [ "${data}" = "" ] && [[ ! ${api} =~ ${post_api} ]]; then
-        output=$(curl -s -L -X GET  "${url}" -u "${userpass}" -H "Accept: application/json")
+        output=$(curl "${common_opts[@]}" -X GET  "${url}" -u "${userpass}" -H "Accept: application/json")
         result=$?
     else
-        output=$(curl -s -L -X POST "${url}" -u "${userpass}" --json "${data}")
+        output=$(curl "${common_opts[@]}" -X POST "${url}" -u "${userpass}" --json "${data}")
         result=$?
     fi
     if [[ "${output}" =~ ^Unauthorized ]]; then
@@ -435,6 +440,10 @@ broadcast_command() {
 # Returns 0 if it saves
 # Returns 1 if it is not able to save
 save_server() {
+    if autopause status '(paused|sleeping)' >/dev/null 2>&1; then
+        LogInfo "Server is paused; skipping save (world already saved before pause)."
+        return 0
+    fi
     local return_val=0
     if ! REST_API save; then
         return_val=1

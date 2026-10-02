@@ -18,6 +18,11 @@ resume() {
         local by=""
         if [ -n "${1}" ]; then by=" by ${1}"; fi
         request "Resumed${by}."
+        local -i wait_count=0
+        while AP_isSleep && [[ wait_count -lt 50 ]]; do
+            ((wait_count++))
+            sleep 0.1
+        done
     fi
 }
 
@@ -55,10 +60,14 @@ case "${1}" in
 "continue")
     stopService off "${2}"
     ;;
+ "status")
+    AP_status "${2}"
+    ;;
 *)
     echo "Usage: $(basename "${0}") <command> [reason]"
     echo "command:"
     echo "    resume    ... resume from paused state"
     echo "    stop      ... stop service"
     echo "    continue  ... continue service"
+    echo "    status    ... show status"
 esac
