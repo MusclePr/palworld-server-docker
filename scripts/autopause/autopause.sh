@@ -64,10 +64,10 @@ case "${1}" in
     AP_status "${2}"
     ;;
 *)
-    echo "Usage: $(basename "${0}") <command> [reason]"
-    echo "command:"
-    echo "    resume    ... resume from paused state"
-    echo "    stop      ... stop service"
-    echo "    continue  ... continue service"
-    echo "    status    ... show status"
+    echo "Usage: $(basename "${0}") <command> [argument]"
+    echo "commands:"
+    echo "    resume [reason]   ... resume from paused state"
+    echo "    stop [reason]     ... stop service"
+    echo "    continue [reason] ... continue service"
+    echo "    status [regex]    ... show status; filter with grep -E"
 esac
