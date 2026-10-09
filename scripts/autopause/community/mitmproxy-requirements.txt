@@ -1,0 +1,2 @@
+mitmproxy>=12.2.3
+werkzeug>=3.1.9
