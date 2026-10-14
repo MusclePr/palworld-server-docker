@@ -1083,6 +1083,10 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
         exit 0
     fi
 
+    if [ "${1:-}" != "check" ]; then
+        update_server_status "updating" 10
+    fi
+
     # Load workshop mod IDs
     mapfile -t WORKSHOP_IDS < <(Workshop_readIds || true)
 
@@ -1114,6 +1118,8 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
         ModLog_debug "current snapshot: ${current_snapshot}"
         exit 2
     fi
+
+    update_server_status "updating" 50
 
     # Deploy UE4SS Palworld artifacts
     UE4SS_deploy "${ue4ss_staging_dir}"
@@ -1158,6 +1164,13 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
 
     if [ "${current_state}" = "${previous_state}" ]; then
         LogInfo "No mod changes detected."
+        if [ "${1:-}" != "check" ]; then
+            if pgrep -f "$(PalworldServerProcessMatch)" >/dev/null 2>&1; then
+                update_server_status "running" 100
+            else
+                update_server_status "stopped" 100
+            fi
+        fi
         exit 0
     fi
 
@@ -1168,6 +1181,7 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     printf '%s\n' "${current_state}" | jq '.' > "${state_file}"
     chmod 644 "${state_file}"
     ModState_cleanupStagingDirs
+    update_server_status "updating" 100
 
     ModLog_debug "previous state: ${previous_state}"
     ModLog_debug "current state: ${current_state}"
