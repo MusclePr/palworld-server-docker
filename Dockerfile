@@ -80,11 +80,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
+COPY scripts/autopause/community/mitmproxy-requirements.txt /tmp/mitmproxy-requirements.txt
 RUN python3 -m venv /opt/mitmproxy-venv \
-    && /opt/mitmproxy-venv/bin/pip install --no-cache-dir mitmproxy \
+    && /opt/mitmproxy-venv/bin/python -m pip install --no-cache-dir --upgrade "pip>=26.2.1" \
+    && /opt/mitmproxy-venv/bin/python -m pip install --no-cache-dir -r /tmp/mitmproxy-requirements.txt \
+    && /opt/mitmproxy-venv/bin/python -m pip install --no-cache-dir --upgrade \
+        "cryptography>=50.0.2" \
+        "h2>=4.4.1" \
+        "msgpack>=1.2.3" \
+        "tornado>=6.5.10" \
+    && rm /tmp/mitmproxy-requirements.txt \
     && ln -s /opt/mitmproxy-venv/bin/mitmproxy /usr/local/bin/ \
     && ln -s /opt/mitmproxy-venv/bin/mitmdump /usr/local/bin/ \
     && ln -s /opt/mitmproxy-venv/bin/mitmweb /usr/local/bin/
+
+COPY scripts/autopause/requirements.txt /tmp/api-proxy-requirements.txt
+RUN python3 -m venv /opt/api-proxy-venv \
+    && /opt/api-proxy-venv/bin/python -m pip install --no-cache-dir --upgrade "pip>=26.2.1" \
+    && /opt/api-proxy-venv/bin/python -m pip install --no-cache-dir -r /tmp/api-proxy-requirements.txt \
+    && rm /tmp/api-proxy-requirements.txt
 
 # install rcon and supercronic
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
@@ -157,6 +171,8 @@ ENV HOME=/home/steam \
     QUERY_PORT=27015 \
     REST_API_ENABLED=true \
     REST_API_PORT=8212 \
+    API_PROXY_ENABLED=false \
+    API_PROXY_PORT=8213 \
     TZ=UTC \
     SERVER_DESCRIPTION= \
     BACKUP_ENABLED=true \

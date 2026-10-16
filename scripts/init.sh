@@ -1,6 +1,9 @@
 #!/bin/bash
 # shellcheck source=scripts/helper_functions.sh
 source "/home/steam/server/helper_functions.sh"
+update_server_status "starting" 0
+status_tracking_enabled=true
+trap 'if [ "${status_tracking_enabled}" = true ]; then update_server_status "stopped" 100; fi' EXIT
 
 # shellcheck source=scripts/negative_delta_recovery.sh
 source "/home/steam/server/negative_delta_recovery.sh"
@@ -79,6 +82,8 @@ fi
 # docker compose run --rm -it palworld steam-login <your-account>
 # docker compose exec -it palworld bash
 if [ -n "${1}" ]; then
+    update_server_status "stopped" 100
+    status_tracking_enabled=false
     LogAction "EXECUTING: $1 "
     if [ "$(id -u)" -eq 0 ]; then
         if ! setpriv --reuid=steam --regid=steam --init-groups -- "$@"; then
@@ -117,6 +122,7 @@ source "/home/steam/server/autopause/init.sh"
 # shellcheck disable=SC2317,SC2329
 term_handler() {
     autopause stop "term_handler"
+    update_server_status "stopping" 10
 
   DiscordMessage "Shutdown" "${DISCORD_PRE_SHUTDOWN_MESSAGE}" "in-progress" "${DISCORD_PRE_SHUTDOWN_MESSAGE_ENABLED}" "${DISCORD_PRE_SHUTDOWN_MESSAGE_URL}"
 
@@ -127,10 +133,15 @@ term_handler() {
         fi
     fi
 
+    APIProxy_stop
     tail --pid="$killpid" -f /dev/null 2>/dev/null
 }
 
 trap 'term_handler' SIGTERM
+
+if ! APIProxy_start; then
+    exit 1
+fi
 
 if [[ "$(id -u)" -eq 0 ]]; then
     # Only if the capabilities set on the executable do not work, we reluctantly add NET_ADMIN and NET_RAW capabilities.
@@ -143,6 +154,8 @@ fi
 killpid="$!"
 wait "$killpid"
 child_rc=$?
+update_server_status "stopped" 100
+APIProxy_stop
 
 mapfile -t backup_pids < <(pgrep backup)
 if [ "${#backup_pids[@]}" -ne 0 ]; then

@@ -1,6 +1,7 @@
 #!/bin/bash
 # shellcheck source=scripts/helper_functions.sh
 source "/home/steam/server/helper_functions.sh"
+update_server_status "starting" 20
 
 # shellcheck source=scripts/negative_delta_recovery.sh
 source "/home/steam/server/negative_delta_recovery.sh"
@@ -138,14 +139,14 @@ ServerInstalled=$?
 if [ "$ServerInstalled" == 1 ]; then
     LogInfo "Server installation not detected."
     LogAction "Starting Installation"
-    InstallServer
+    InstallServer || exit 1
 fi
 
 # Always update on boot even if the server is installed, to prevent appmanifest issues
 if [ "$ServerInstalled" == 0 ] && [ "${UPDATE_ON_BOOT,,}" == true ]; then
     if UpdateRequired; then
         rm /palworld/steamapps/appmanifest_2394010.acf
-        InstallServer
+        InstallServer || exit 1
     fi
 fi
 
@@ -155,6 +156,7 @@ if ! fileExists "${server_binary}"; then
     LogError "Server Not Installed Properly"
     exit 1
 fi
+update_server_status "starting" 50
 
 STARTCOMMAND=("${server_binary}")
 STARTCOMMAND_NOARGS=("${server_binary}")
@@ -268,6 +270,7 @@ if [ "${platform}" = "windows" ]; then
         if isTrue "${MOD_UPDATE_ON_BOOT}"; then
             LogAction "Update the Mods"
             mods-update || exit
+            update_server_status "starting" 50
         fi
     else
         if [ -f "/palworld/Mods/.state.json" ]; then
@@ -348,7 +351,29 @@ LogAction "Starting Server"
 DiscordMessage "Start" "${DISCORD_PRE_START_MESSAGE}" "success" "${DISCORD_PRE_START_MESSAGE_ENABLED}" "${DISCORD_PRE_START_MESSAGE_URL}"
 
 echo "${STARTCOMMAND[*]}"
-"${STARTCOMMAND[@]}"
+update_server_status "starting" 70
+"${STARTCOMMAND[@]}" &
+server_launcher_pid="$!"
+while server_launcher_state="$(ps -o stat= -p "${server_launcher_pid}" 2>/dev/null)" \
+    && [[ "${server_launcher_state}" != *Z* ]]; do
+    if [ "${REST_API_ENABLED,,}" = true ]; then
+        if nc -z -w 1 127.0.0.1 "${REST_API_PORT}"; then
+            update_server_status "starting" 90
+            if curl --connect-timeout 1 --max-time 2 -fsS -o /dev/null \
+                -u "admin:${ADMIN_PASSWORD}" "http://127.0.0.1:${REST_API_PORT}/v1/api/info" 2>/dev/null; then
+                update_server_status "running" 100
+                break
+            fi
+        fi
+    elif PalworldServerIsRunning; then
+        update_server_status "starting" 90
+        update_server_status "running" 100
+        break
+    fi
+    sleep 0.5
+done
+wait "${server_launcher_pid}"
+update_server_status "stopping" 100
 
 LogAction "Ending Server"
 
